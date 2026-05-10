@@ -173,3 +173,80 @@ function escapeHtml(s: string) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+/**
+ * Export a single SVG element as a one-page A4 landscape PDF.
+ * Used by the schedule section's "A4 가로 1장 PDF" button.
+ */
+export async function exportSvgAsLandscapePdf({
+  svg,
+  fileName,
+}: {
+  svg: SVGSVGElement;
+  fileName: string;
+}) {
+  // A4 landscape: 297mm × 210mm = 841.89pt × 595.28pt
+  const pdf = new jsPDF({ format: 'a4', orientation: 'landscape', unit: 'pt' });
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const margin = 18;
+  const drawW = pageW - margin * 2;
+  const drawH = pageH - margin * 2;
+
+  // Serialize SVG and rasterize via Image+canvas for crisp print output.
+  const cloned = svg.cloneNode(true) as SVGSVGElement;
+  if (!cloned.getAttribute('xmlns')) {
+    cloned.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  }
+  // Pull viewBox dimensions for aspect-correct rendering
+  const viewBox = cloned.getAttribute('viewBox') || '0 0 1130 800';
+  const [, , vbW, vbH] = viewBox.split(/\s+/).map(Number);
+
+  // Render at 2.5x for crispness
+  const scale = 2.5;
+  cloned.setAttribute('width', String(vbW * scale));
+  cloned.setAttribute('height', String(vbH * scale));
+
+  const xml = new XMLSerializer().serializeToString(cloned);
+  const svgBlob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(svgBlob);
+
+  try {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('SVG 이미지 로드 실패'));
+      img.src = url;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = vbW * scale;
+    canvas.height = vbH * scale;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/png');
+
+    // Fit while preserving aspect ratio (svg is wider than A4 landscape, so width-fit)
+    const svgRatio = vbW / vbH;
+    const pageRatio = drawW / drawH;
+    let imgW: number;
+    let imgH: number;
+    if (svgRatio >= pageRatio) {
+      imgW = drawW;
+      imgH = drawW / svgRatio;
+    } else {
+      imgH = drawH;
+      imgW = drawH * svgRatio;
+    }
+    const offsetX = margin + (drawW - imgW) / 2;
+    const offsetY = margin + (drawH - imgH) / 2;
+
+    pdf.addImage(dataUrl, 'PNG', offsetX, offsetY, imgW, imgH);
+    pdf.save(fileName);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}

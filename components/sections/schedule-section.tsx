@@ -1,14 +1,27 @@
 'use client';
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { Eye, Printer, Loader2, MonitorPlay, FileDown } from 'lucide-react';
+import { toast } from 'sonner';
 import type { ScheduleEvent } from '@/types';
-import { formatDate } from '@/lib/utils';
+import { formatDate, cn } from '@/lib/utils';
 import { SourceBadge } from '@/components/common/source-badge';
+import { PrintGantt } from './print-gantt';
+import { Button } from '@/components/ui/button';
+import { exportSvgAsLandscapePdf } from '@/lib/pdf-export';
 
 const ROW_HEIGHT = 46;
 const HEADER_HEIGHT = 32;
 const PADDING_LEFT = 220;
 
-export function ScheduleSection({ schedule }: { schedule: ScheduleEvent[] }) {
+interface ScheduleSectionProps {
+  schedule: ScheduleEvent[];
+  projectName?: string;
+  client?: string;
+  /** When true, render only the print-optimized variant (used inside PDF report). */
+  forPrint?: boolean;
+}
+
+export function ScheduleSection({ schedule, projectName, client, forPrint = false }: ScheduleSectionProps) {
   const sorted = useMemo(
     () => [...schedule].filter((e) => !!e.date).sort((a, b) => (a.date > b.date ? 1 : -1)),
     [schedule]
@@ -44,15 +57,212 @@ export function ScheduleSection({ schedule }: { schedule: ScheduleEvent[] }) {
   const usableWidth = chartWidth - PADDING_LEFT - 40;
   const monthMarks = computeMonthMarks(minDate, maxDate);
 
+  // ----- Print mode (used inside PDF report or screen preview) -----
+  if (forPrint) {
+    return (
+      <div className="space-y-2">
+        <PrintGantt schedule={sorted} projectName={projectName} client={client} />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3 text-[12px]">
-        <Legend color="#1d4ed8" label="발주처 일정" />
-        <Legend color="#047857" label="사무소 내부 마일스톤" />
-        <span className="ml-auto text-[11.5px] text-zinc-400">
-          {formatDate(minDate)} → {formatDate(maxDate)} · {totalDays}일
+    <ScheduleInteractive
+      sorted={sorted}
+      officialEvents={officialEvents}
+      internalEvents={internalEvents}
+      rows={rows}
+      chartWidth={chartWidth}
+      usableWidth={usableWidth}
+      minDate={minDate}
+      maxDate={maxDate}
+      totalDays={totalDays}
+      monthMarks={monthMarks}
+      projectName={projectName}
+      client={client}
+    />
+  );
+}
+
+interface InteractiveProps {
+  sorted: ScheduleEvent[];
+  officialEvents: ScheduleEvent[];
+  internalEvents: ScheduleEvent[];
+  rows: ScheduleEvent[];
+  chartWidth: number;
+  usableWidth: number;
+  minDate: Date;
+  maxDate: Date;
+  totalDays: number;
+  monthMarks: Array<{ day: number; label: string }>;
+  projectName?: string;
+  client?: string;
+}
+
+function ScheduleInteractive({
+  sorted,
+  officialEvents,
+  internalEvents,
+  rows,
+  chartWidth,
+  usableWidth,
+  minDate,
+  maxDate,
+  totalDays,
+  monthMarks,
+  projectName,
+  client,
+}: InteractiveProps) {
+  const [mode, setMode] = useState<'screen' | 'print'>('screen');
+  const [exporting, setExporting] = useState(false);
+  const printSvgRef = useRef<SVGSVGElement>(null);
+
+  async function handleExport() {
+    if (!printSvgRef.current) {
+      toast.error('출력할 차트가 준비되지 않았습니다.');
+      return;
+    }
+    setExporting(true);
+    try {
+      await exportSvgAsLandscapePdf({
+        svg: printSvgRef.current,
+        fileName: `${projectName || '제출일정표'}_제출일정표.pdf`,
+      });
+      toast.success('A4 가로 한 장 PDF로 내보냈습니다.');
+    } catch (e) {
+      toast.error('PDF 출력 실패: ' + (e as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Top toolbar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <button
+            onClick={() => setMode('screen')}
+            className={cn(
+              'inline-flex h-8 items-center gap-1.5 rounded px-2.5 text-[12px] font-medium transition-colors',
+              mode === 'screen' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:text-zinc-900'
+            )}
+          >
+            <MonitorPlay className="h-3.5 w-3.5" />
+            화면용
+          </button>
+          <button
+            onClick={() => setMode('print')}
+            className={cn(
+              'inline-flex h-8 items-center gap-1.5 rounded px-2.5 text-[12px] font-medium transition-colors',
+              mode === 'print' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:text-zinc-900'
+            )}
+          >
+            <Printer className="h-3.5 w-3.5" />
+            PDF 출력용
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 text-[12px]">
+          <Legend color="#1d4ed8" label="발주처 일정" />
+          <Legend color="#047857" label="사무소 내부 역산" diamond />
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-[11.5px] text-zinc-400">
+            {formatDate(minDate)} → {formatDate(maxDate)} · {totalDays}일
+          </span>
+          {mode === 'print' && (
+            <Button variant="cta" size="sm" onClick={handleExport} disabled={exporting}>
+              {exporting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileDown className="h-3.5 w-3.5" />
+              )}
+              A4 가로 1장 PDF
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {mode === 'print' ? (
+        <PrintModeBlock
+          schedule={sorted}
+          projectName={projectName}
+          client={client}
+          svgRef={printSvgRef}
+        />
+      ) : (
+        <ScreenInteractive
+          rows={rows}
+          officialEvents={officialEvents}
+          internalEvents={internalEvents}
+          chartWidth={chartWidth}
+          usableWidth={usableWidth}
+          minDate={minDate}
+          totalDays={totalDays}
+          monthMarks={monthMarks}
+        />
+      )}
+    </div>
+  );
+}
+
+function PrintModeBlock({
+  schedule,
+  projectName,
+  client,
+  svgRef,
+}: {
+  schedule: ScheduleEvent[];
+  projectName?: string;
+  client?: string;
+  svgRef: React.RefObject<SVGSVGElement>;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 text-[11.5px] text-zinc-500">
+        <Eye className="h-3.5 w-3.5" strokeWidth={1.8} />
+        <span>
+          A4 가로 한 장에 맞춰 모든 마일스톤이 잘리지 않도록 폰트·간격이 자동 조정된 미리보기입니다.
         </span>
       </div>
+      <div className="surface-card overflow-hidden p-3">
+        <div className="overflow-x-auto rounded-md border border-zinc-200 bg-white">
+          <PrintGantt
+            ref={svgRef}
+            schedule={schedule}
+            projectName={projectName}
+            client={client}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScreenInteractive({
+  rows,
+  officialEvents,
+  internalEvents,
+  chartWidth,
+  usableWidth,
+  minDate,
+  totalDays,
+  monthMarks,
+}: {
+  rows: ScheduleEvent[];
+  officialEvents: ScheduleEvent[];
+  internalEvents: ScheduleEvent[];
+  chartWidth: number;
+  usableWidth: number;
+  minDate: Date;
+  totalDays: number;
+  monthMarks: Array<{ day: number; label: string }>;
+}) {
+  return (
+    <div className="space-y-5">
+      {/* legacy interactive content begins below */}
 
       <div className="surface-card overflow-x-auto p-4">
         <svg
@@ -185,10 +395,17 @@ export function ScheduleSection({ schedule }: { schedule: ScheduleEvent[] }) {
   );
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
+function Legend({ color, label, diamond }: { color: string; label: string; diamond?: boolean }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-zinc-600">
-      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+      {diamond ? (
+        <span
+          className="inline-block h-2.5 w-2.5 rotate-45"
+          style={{ background: color }}
+        />
+      ) : (
+        <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+      )}
       {label}
     </span>
   );

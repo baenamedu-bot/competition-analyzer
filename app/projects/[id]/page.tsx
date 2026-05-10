@@ -352,8 +352,16 @@ export default function ProjectPage() {
         )}
 
         {a && section === 'schedule' && (
-          <SectionWrap step="3" title="제출 일정표" subtitle="발주처 일정과 사무소 내부 마일스톤이 색상으로 구분됩니다.">
-            <ScheduleSection schedule={a.schedule} />
+          <SectionWrap
+            step="3"
+            title="제출 일정표"
+            subtitle="화면용 인터랙티브 뷰와 A4 가로 한 장 인쇄용 뷰를 토글로 전환할 수 있습니다."
+          >
+            <ScheduleSection
+              schedule={a.schedule}
+              projectName={project.name}
+              client={project.client}
+            />
           </SectionWrap>
         )}
 

@@ -41,8 +41,13 @@ export function ReportShell({ project, forPrint = false }: Props) {
         <SummarySection summary={a.summary} />
       </Block>
 
-      <Block title="2. 제출 일정표" subtitle="발주처 일정(청색) + 사무소 내부 마일스톤(녹색)">
-        <ScheduleSection schedule={a.schedule} />
+      <Block title="2. 제출 일정표" subtitle="발주처 일정(청색 원) + 사무소 내부 역산(녹색 다이아) · A4 가로 한 장 인쇄 최적화">
+        <ScheduleSection
+          schedule={a.schedule}
+          projectName={project.name}
+          client={project.client}
+          forPrint
+        />
       </Block>
 
       <Block title="3. 디자인 컨셉 10개" subtitle="카테고리 분산 · 즐겨찾기 별표 · 발전안 포함">
