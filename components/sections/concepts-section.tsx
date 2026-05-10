@@ -1,7 +1,10 @@
 'use client';
-import { Star, ThumbsUp, AlertTriangle, Lightbulb } from 'lucide-react';
-import type { DesignConcept } from '@/types';
+import { useState } from 'react';
+import { Star, ThumbsUp, AlertTriangle, Lightbulb, Sparkles, Wand2 } from 'lucide-react';
+import type { DesignConcept, ConceptDevelopment } from '@/types';
 import { SourceBadge } from '@/components/common/source-badge';
+import { DevelopmentPanel } from '@/components/concepts/development-panel';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -29,9 +32,24 @@ interface Props {
   concepts: DesignConcept[];
   starredIds: string[];
   onToggleStar: (id: string) => void;
+  developments?: Record<string, ConceptDevelopment>;
+  onDevelop?: (concept: DesignConcept, index: number) => void;
+  onDeleteDevelopment?: (conceptId: string) => void;
+  /** Force-open all panels and hide interactive controls (used by PDF export). */
+  staticAll?: boolean;
 }
 
-export function ConceptsSection({ concepts, starredIds, onToggleStar }: Props) {
+export function ConceptsSection({
+  concepts,
+  starredIds,
+  onToggleStar,
+  developments,
+  onDevelop,
+  onDeleteDevelopment,
+  staticAll = false,
+}: Props) {
+  const [openPanels, setOpenPanels] = useState<Set<string>>(new Set());
+
   if (concepts.length === 0) {
     return (
       <div className="surface-card p-8 text-center text-[13px] text-zinc-400">
@@ -40,16 +58,28 @@ export function ConceptsSection({ concepts, starredIds, onToggleStar }: Props) {
     );
   }
 
+  function togglePanel(id: string) {
+    setOpenPanels((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {concepts.map((c, idx) => {
         const starred = starredIds.includes(c.id);
+        const dev = developments?.[c.id];
+        const open = staticAll || openPanels.has(c.id);
         return (
           <article
             key={c.id}
             className={cn(
               'surface-card relative flex flex-col gap-3 p-5 transition-all',
-              starred && 'border-amber-200 bg-amber-50/20 ring-1 ring-amber-100'
+              starred && 'border-amber-200 bg-amber-50/20 ring-1 ring-amber-100',
+              dev && 'border-zinc-300'
             )}
           >
             <header className="flex items-start justify-between gap-3">
@@ -66,23 +96,31 @@ export function ConceptsSection({ concepts, starredIds, onToggleStar }: Props) {
                   {c.category}
                 </span>
                 <SourceBadge source={c.source} />
-              </div>
-              <button
-                onClick={() => onToggleStar(c.id)}
-                className={cn(
-                  'inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors',
-                  starred
-                    ? 'text-amber-500 hover:bg-amber-100'
-                    : 'text-zinc-300 hover:bg-zinc-100 hover:text-zinc-500'
+                {dev && (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-1.5 py-0.5 text-[10.5px] font-semibold text-zinc-700">
+                    <Sparkles className="h-2.5 w-2.5" />
+                    발전됨
+                  </span>
                 )}
-                aria-label={starred ? '즐겨찾기 해제' : '즐겨찾기'}
-              >
-                <Star
-                  className="h-[18px] w-[18px]"
-                  fill={starred ? 'currentColor' : 'none'}
-                  strokeWidth={1.7}
-                />
-              </button>
+              </div>
+              {!staticAll && (
+                <button
+                  onClick={() => onToggleStar(c.id)}
+                  className={cn(
+                    'inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors',
+                    starred
+                      ? 'text-amber-500 hover:bg-amber-100'
+                      : 'text-zinc-300 hover:bg-zinc-100 hover:text-zinc-500'
+                  )}
+                  aria-label={starred ? '즐겨찾기 해제' : '즐겨찾기'}
+                >
+                  <Star
+                    className="h-[18px] w-[18px]"
+                    fill={starred ? 'currentColor' : 'none'}
+                    strokeWidth={1.7}
+                  />
+                </button>
+              )}
             </header>
 
             <div>
@@ -147,6 +185,31 @@ export function ConceptsSection({ concepts, starredIds, onToggleStar }: Props) {
                 </ul>
               </div>
             </div>
+
+            {!staticAll && onDevelop && (
+              <div className="pt-2">
+                <Button
+                  variant={dev ? 'outline' : 'cta'}
+                  size="sm"
+                  className="w-full"
+                  onClick={() => onDevelop(c, idx)}
+                >
+                  <Wand2 className="h-3.5 w-3.5" />
+                  {dev ? '발전안 다시 생성 / 편집' : '이 컨셉으로 발전시키기'}
+                </Button>
+              </div>
+            )}
+
+            {dev && (
+              <DevelopmentPanel
+                dev={dev}
+                open={open}
+                onToggle={() => !staticAll && togglePanel(c.id)}
+                onRegenerate={() => onDevelop?.(c, idx)}
+                onDelete={() => onDeleteDevelopment?.(c.id)}
+                readOnly={staticAll}
+              />
+            )}
           </article>
         );
       })}

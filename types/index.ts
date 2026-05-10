@@ -111,10 +111,33 @@ export interface AnalysisResult {
   relations: ProgramRelation[];
 }
 
+export interface ConceptDevelopment {
+  conceptId: string;
+  generatedAt: string;
+  model: string;
+  diagram: {
+    summary: string;
+    keywords: string[];
+    geometry: string;
+  };
+  spatial: {
+    summary: string;
+    spaces: Array<{ name: string; description: string }>;
+    circulation: string;
+  };
+  facade: {
+    summary: string;
+    materials: string[];
+    facadeStrategy: string;
+    detailNotes: string;
+  };
+}
+
 export interface ProjectState extends ProjectMeta {
   documents: Record<DocKind, DocumentExtract | null>;
   analysis: AnalysisResult | null;
   memo: string;
   starredConceptIds: string[];
   checkedSubmittableIds: string[];
+  conceptDevelopments?: Record<string, ConceptDevelopment>;
 }

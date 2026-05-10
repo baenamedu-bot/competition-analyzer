@@ -30,10 +30,11 @@ import { ChecklistSection } from '@/components/sections/checklist-section';
 import { ProgramSection } from '@/components/sections/program-section';
 import { MemoSection } from '@/components/sections/memo-section';
 import { ReportShell } from '@/components/report/report-shell';
+import { DevelopModal } from '@/components/concepts/develop-modal';
 import { getProject, saveProject } from '@/lib/storage';
 import { exportToPdf, exportToHtml } from '@/lib/pdf-export';
 import { formatDate, cn } from '@/lib/utils';
-import type { ProjectState, DocKind } from '@/types';
+import type { ProjectState, DocKind, DesignConcept, ConceptDevelopment } from '@/types';
 
 type SectionKey = 'docs' | 'summary' | 'schedule' | 'concepts' | 'checklist' | 'programs' | 'memo';
 
@@ -55,6 +56,7 @@ export default function ProjectPage() {
   const [section, setSection] = useState<SectionKey>('docs');
   const [exporting, setExporting] = useState<'pdf' | 'html' | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const [develop, setDevelop] = useState<{ concept: DesignConcept; index: number } | null>(null);
 
   useEffect(() => {
     if (!params?.id) return;
@@ -93,6 +95,20 @@ export default function ProjectPage() {
     if (s.has(id)) s.delete(id);
     else s.add(id);
     update({ ...project, checkedSubmittableIds: [...s] });
+  }
+
+  function saveDevelopment(dev: ConceptDevelopment) {
+    if (!project) return;
+    const next = { ...(project.conceptDevelopments ?? {}), [dev.conceptId]: dev };
+    update({ ...project, conceptDevelopments: next });
+  }
+
+  function deleteDevelopment(conceptId: string) {
+    if (!project?.conceptDevelopments) return;
+    const next = { ...project.conceptDevelopments };
+    delete next[conceptId];
+    update({ ...project, conceptDevelopments: next });
+    toast.success('발전안을 삭제했습니다.');
   }
 
   async function handleExportPdf() {
@@ -342,11 +358,14 @@ export default function ProjectPage() {
         )}
 
         {a && section === 'concepts' && (
-          <SectionWrap step="4" title="디자인 컨셉 10개" subtitle="카테고리가 겹치지 않도록 분산 생성됩니다. 별표로 즐겨찾기.">
+          <SectionWrap step="4" title="디자인 컨셉 10개" subtitle="카테고리가 겹치지 않도록 분산 생성됩니다. 별표로 즐겨찾기, 카드 하단 ‘발전시키기’로 다이어그램·공간·입면 단계로 한 칸 더.">
             <ConceptsSection
               concepts={a.concepts}
               starredIds={project.starredConceptIds}
               onToggleStar={toggleStar}
+              developments={project.conceptDevelopments}
+              onDevelop={(c, i) => setDevelop({ concept: c, index: i })}
+              onDeleteDevelopment={deleteDevelopment}
             />
           </SectionWrap>
         )}
@@ -409,6 +428,24 @@ export default function ProjectPage() {
           </div>
         </div>
       )}
+
+      {/* Concept development modal */}
+      <DevelopModal
+        open={!!develop}
+        onOpenChange={(o) => !o && setDevelop(null)}
+        concept={develop?.concept ?? null}
+        conceptIndex={develop?.index}
+        projectName={project.name}
+        client={project.client}
+        summarySnapshot={a?.summary}
+        programsSnapshot={a?.programs}
+        existing={
+          develop && project.conceptDevelopments
+            ? project.conceptDevelopments[develop.concept.id] ?? null
+            : null
+        }
+        onSave={saveDevelopment}
+      />
     </div>
   );
 }

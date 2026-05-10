@@ -45,11 +45,13 @@ export function ReportShell({ project, forPrint = false }: Props) {
         <ScheduleSection schedule={a.schedule} />
       </Block>
 
-      <Block title="3. 디자인 컨셉 10개" subtitle="카테고리 분산 · 즐겨찾기 별표">
+      <Block title="3. 디자인 컨셉 10개" subtitle="카테고리 분산 · 즐겨찾기 별표 · 발전안 포함">
         <ConceptsSection
           concepts={a.concepts}
           starredIds={project.starredConceptIds}
           onToggleStar={() => {}}
+          developments={project.conceptDevelopments}
+          staticAll
         />
       </Block>
 

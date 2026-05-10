@@ -1,4 +1,4 @@
-import type { DocumentExtract, DocKind } from '@/types';
+import type { DocumentExtract, DocKind, DesignConcept, AnalysisResult } from '@/types';
 import { DOC_LABELS } from '@/types';
 
 export const SYSTEM_BASE = `당신은 한국 건축설계사무소를 보조하는 전문 어시스턴트입니다. 현상설계 공모(설계 경기)의 공모지침서·공고문·과업지시서를 정밀하게 읽고 구조화된 데이터를 생성합니다.
@@ -171,6 +171,86 @@ export interface CrossRefInput {
   finalDeadline: string;
   projectName: string;
   client: string;
+}
+
+export interface DevelopInput {
+  concept: DesignConcept;
+  projectName: string;
+  client: string;
+  summarySnapshot?: AnalysisResult['summary'];
+  programsSnapshot?: AnalysisResult['programs'];
+}
+
+export const DEVELOP_PROMPT = `다음 디자인 컨셉을 시드로, 한국 건축설계사무소의 실무자가 다음 단계 작업(매스 다이어그램·평면 스터디·입면 스터디)으로 곧장 진입할 수 있도록 더 깊게 발전시키세요.
+
+응답은 다음 JSON 스키마를 정확히 따르세요:
+{
+  "diagram": {
+    "summary": "다이어그램의 핵심 한 줄 (50자 이내, 예: '중앙 보이드를 둘러싸는 ㄷ자 매스')",
+    "keywords": ["스케치 키워드 6~10개 (예: '중앙 코어', '캔틸레버', '계단형 셋백', '지붕 슬릿')"],
+    "geometry": "기하학적 조작 설명 (120~180자, 매스 분절·축·층 구성·외부 공간 구성 포함)"
+  },
+  "spatial": {
+    "summary": "핵심 공간 구성의 한 줄 (50자 이내)",
+    "spaces": [
+      { "name": "공간 이름 (예: 메인 보이드, 전이 공간, 옥상 정원)", "description": "역할·치수 감각·인접 관계 (60~100자)" }
+    ],
+    "circulation": "동선 전략 — 방문객·직원·서비스 분리, 수직 동선 위치, 진입 시퀀스 (120~180자)"
+  },
+  "facade": {
+    "summary": "입면·재료의 한 줄 (50자 이내)",
+    "materials": ["재료 조합 3~5개 (예: '노출콘크리트', '브론즈 알루미늄 패널', '저철분 유리')"],
+    "facadeStrategy": "방위별 입면 전략 — 채광·일사·프라이버시·도시 맥락 대응 (120~180자)",
+    "detailNotes": "디테일 포인트 — 처마·코니스·창호 분할·바닥 마감 전이 등 1~2개 (80~140자)"
+  }
+}
+
+지침:
+- spaces는 4~6개
+- 모든 텍스트는 한국어
+- 컨셉의 nameKo·oneLiner·rationale·spatialStrategy를 그대로 반복하지 말고, 한 단계 더 구체화한 건축 어휘로 작성
+- 발주처 성향과 프로젝트 맥락(아래 명시)을 반영하되, 추측한 수치는 "약 N㎡" 같이 추정 표현 사용
+- 마크다운 코드블록 금지, 순수 JSON만`;
+
+export function buildDevelopPrompt(input: DevelopInput): string {
+  const c = input.concept;
+  const summary = input.summarySnapshot
+    ? '\n=== 요약 스냅샷 ===\n' +
+      input.summarySnapshot
+        .map(
+          (cat) =>
+            `[${cat.category}] ` +
+            cat.items
+              .slice(0, 5)
+              .map((it) => `${it.label}: ${it.value}`)
+              .join(' / ')
+        )
+        .join('\n')
+    : '';
+  const programs = input.programsSnapshot && input.programsSnapshot.length > 0
+    ? '\n=== 주요 도입 시설 ===\n' +
+      input.programsSnapshot
+        .slice(0, 12)
+        .map((p) => `- ${p.name} (${p.area || '면적 미상'})`)
+        .join('\n')
+    : '';
+
+  return `프로젝트명: ${input.projectName}
+발주처: ${input.client || '미입력'}
+${summary}${programs}
+
+=== 시드 컨셉 ===
+번호/카테고리: ${c.category}
+이름: ${c.nameKo} (${c.nameEn})
+한 줄 메시지: ${c.oneLiner}
+발상 배경: ${c.rationale}
+공간/형태 전략: ${c.spatialStrategy}
+키워드: ${c.keywords.join(', ')}
+강점: ${c.strengths.join(' · ')}
+약점: ${c.weaknesses.join(' · ')}
+
+=== 작업 ===
+${DEVELOP_PROMPT}`;
 }
 
 export function buildPrompt(kind: 'summary' | 'schedule' | 'concepts' | 'submittables' | 'programs', input: CrossRefInput): string {
