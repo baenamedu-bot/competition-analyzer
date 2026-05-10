@@ -140,4 +140,10 @@ export interface ProjectState extends ProjectMeta {
   starredConceptIds: string[];
   checkedSubmittableIds: string[];
   conceptDevelopments?: Record<string, ConceptDevelopment>;
+  /**
+   * If present, replaces analysis.relations for display.
+   * Original [지침] relations (source !== 'ai') are preserved verbatim.
+   * User-added/removed relations all have source: 'ai'.
+   */
+  relationsOverride?: ProgramRelation[];
 }

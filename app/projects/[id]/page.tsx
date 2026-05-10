@@ -34,7 +34,7 @@ import { DevelopModal } from '@/components/concepts/develop-modal';
 import { getProject, saveProject } from '@/lib/storage';
 import { exportToPdf, exportToHtml } from '@/lib/pdf-export';
 import { formatDate, cn } from '@/lib/utils';
-import type { ProjectState, DocKind, DesignConcept, ConceptDevelopment } from '@/types';
+import type { ProjectState, DocKind, DesignConcept, ConceptDevelopment, ProgramRelation } from '@/types';
 
 type SectionKey = 'docs' | 'summary' | 'schedule' | 'concepts' | 'checklist' | 'programs' | 'memo';
 
@@ -109,6 +109,17 @@ export default function ProjectPage() {
     delete next[conceptId];
     update({ ...project, conceptDevelopments: next });
     toast.success('발전안을 삭제했습니다.');
+  }
+
+  function saveRelations(next: ProgramRelation[]) {
+    if (!project) return;
+    update({ ...project, relationsOverride: next });
+  }
+
+  function resetRelationsOverride() {
+    if (!project) return;
+    const { relationsOverride: _omit, ...rest } = project;
+    update(rest as ProjectState);
   }
 
   async function handleExportPdf() {
@@ -389,8 +400,20 @@ export default function ProjectPage() {
         )}
 
         {a && section === 'programs' && (
-          <SectionWrap step="6" title="프로그램 관계 분석" subtitle="과업지시서의 도입 시설을 표 + Bubble Diagram으로 시각화.">
-            <ProgramSection programs={a.programs} relations={a.relations} />
+          <SectionWrap
+            step="6"
+            title="프로그램 관계 분석"
+            subtitle="과업지시서의 도입 시설을 표 + Bubble Diagram으로 시각화. 편집 모드에서 [추천] 관계선을 추가/삭제할 수 있습니다."
+          >
+            <ProgramSection
+              programs={a.programs}
+              relations={project.relationsOverride ?? a.relations}
+              layoutRelations={a.relations}
+              editable
+              hasOverride={!!project.relationsOverride}
+              onSave={saveRelations}
+              onResetOverride={resetRelationsOverride}
+            />
           </SectionWrap>
         )}
 

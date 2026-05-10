@@ -69,7 +69,11 @@ export function ReportShell({ project, forPrint = false }: Props) {
       </Block>
 
       <Block title="5. 프로그램 관계 분석" subtitle="도입 시설 + Bubble Diagram (인접·분리·시각·보안)">
-        <ProgramSection programs={a.programs} relations={a.relations} />
+        <ProgramSection
+          programs={a.programs}
+          relations={project.relationsOverride ?? a.relations}
+          layoutRelations={a.relations}
+        />
       </Block>
 
       <Block title="6. 메모" subtitle="검토 과정에서 누적된 의견·수정사항">
